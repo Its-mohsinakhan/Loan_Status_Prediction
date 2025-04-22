@@ -1,0 +1,28 @@
+Problem Statement: Loan Status Classification
+
+Problem Overview:
+You are tasked with developing a machine learning model to predict the loan status of applicants based on various features. The goal is to classify whether a loan application will be 'Fully Paid' or 'Charged Off', given certain characteristics of the applicant and the loan.
+
+Dataset:
+You are provided with a dataset containing information about past loan applicants, including features such as applicant's age, income, employment status, credit score, loan amount, loan term, etc. Each entry in the dataset also includes the loan status, which can be either 'Fully Paid' or 'Charged Off'.
+
+Objective:
+Your objective is to build a classification model that can accurately predict the loan status of future applicants based on their attributes. The model should be trained on historical data to learn patterns and relationships between the features and the loan status. Once trained, the model should be capable of making predictions on new, unseen data.
+
+Key Tasks:
+1. Data Exploration and Preprocessing:
+   - Perform exploratory data analysis to understand the distribution of features, identify missing values, and detect outliers.
+   - Preprocess the data by handling missing values, encoding categorical variables, and scaling numerical features if necessary.
+
+2. Feature Selection and Engineering:
+   - Select relevant features that are likely to have predictive power in determining loan status.
+   - Create new features if needed, such as debt-to-income ratio, loan-to-income ratio, etc., that could improve the model's performance.
+
+3. Model Selection and Training:
+   - Choose appropriate classification algorithms (e.g., logistic regression, decision trees, random forests,Knn etc) for the task.
+   - Train multiple models and tune hyperparameters to optimize performance metrics such as accuracy, confusion matrix.
+
+
+
+Success Criteria:
+The success of the project will be measured based on the model's ability to accurately predict loan status for new applicants, as demonstrated by high performance metrics on the test dataset.
