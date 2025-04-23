@@ -1,90 +1,91 @@
-import streamlit as st
+import pickle
 import pandas as pd
 import numpy as np
-import joblib
+import streamlit as st
 
-# ✅ Must be the first Streamlit command
-st.set_page_config(page_title="Loan Status Predictor", layout="centered")
+def predict_loan_status(inputs, scaler_path, imputer_path, model_path):
+    try:
+        # Load the scaler, imputer, model
+        with open(scaler_path, 'rb') as f1:
+            scaler = pickle.load(f1)
+        with open(imputer_path, 'rb') as f2:
+            imputer = pickle.load(f2)
+        with open(model_path, 'rb') as f3:
+            model = pickle.load(f3)
 
-# Load trained model and preprocessors
-model = joblib.load("Notebook/loan_model.pkl")
-imputer = joblib.load("Notebook/imputer.pkl")
-scaler = joblib.load("Notebook/scaler.pkl")
+        # Columns used in the model
+        cols = [
+            "Credit Score", "Annual Income", "Monthly Debt", "Current Loan Amount",
+            "loan_term_months", "monthly_installment_est", "dti", "loan_to_income",
+            "years_in_job_num", "Credit_Score_missing", "Annual_Income_missing",
+            "Delinquent_missing", "Home Ownership", "Purpose"
+        ]
 
-# Optional: Load label encoders if needed
-# le_home = joblib.load("le_home.pkl")
-# le_purpose = joblib.load("le_purpose.pkl")
+        # Create a DataFrame
+        x_input = pd.DataFrame([inputs], columns=cols)
 
-st.title("🏦 Loan Status Prediction App")
-st.markdown("Enter loan applicant details below to predict whether the loan will be **Fully Paid** or **Charged Off**.")
+        # Impute & scale
+        x_input[scaler.feature_names_in_] = imputer.transform(x_input[scaler.feature_names_in_])
+        x_input[scaler.feature_names_in_] = scaler.transform(x_input[scaler.feature_names_in_])
 
-# 📋 User inputs
-with st.form("loan_form"):
-    credit_score = st.number_input("Credit Score", min_value=300, max_value=850, value=700)
-    annual_income = st.number_input("Annual Income", min_value=0.0, value=50000.0)
-    monthly_debt = st.number_input("Monthly Debt", min_value=0.0, value=1500.0)
-    loan_amount = st.number_input("Loan Amount", min_value=0.0, value=10000.0)
-    term = st.selectbox("Loan Term", ["Short Term", "Long Term"])
-    years_in_job = st.selectbox("Years in Current Job", ["< 1 year", "1 year", "2 years", "3 years", "4 years",
-                                                         "5 years", "6 years", "7 years", "8 years", "9 years", "10+ years"])
-    home_ownership = st.selectbox("Home Ownership", ["Own Home", "Home Mortgage", "Rent", "Other"])
-    purpose = st.selectbox("Purpose", ["Debt Consolidation", "Home Improvements", "Other"])
+        # Predict
+        pred = model.predict(x_input)
+        prob = model.predict_proba(x_input)[0][pred[0]]
 
-    submit = st.form_submit_button("Predict")
+        return pred[0], prob
+    except Exception as e:
+        st.error(f"Prediction error: {e}")
+        return None, None
 
-if submit:
-    # Feature Engineering
-    loan_term_months = 36 if term == "Short Term" else 60
-    monthly_installment_est = loan_amount / (loan_term_months + 1)
-    loan_to_income = loan_amount / (annual_income + 1)
-    dti = monthly_debt / (annual_income + 1)
+# ============== Streamlit UI ==============
+st.set_page_config(page_title="Loan Status Predictor")
+st.title("🏦 Loan Status Prediction")
 
-    def parse_years(val):
-        if val == "10+ years":
-            return 10
-        if val == "< 1 year":
-            return 0.5
-        return float(val.split()[0])
+st.markdown("Fill in the loan application details:")
 
-    years_in_job_num = parse_years(years_in_job)
+# Inputs
+credit_score = st.number_input("Credit Score", 300, 850, value=700)
+annual_income = st.number_input("Annual Income ($)", value=50000.0)
+monthly_debt = st.number_input("Monthly Debt ($)", value=1500.0)
+loan_amount = st.number_input("Loan Amount ($)", value=10000.0)
+term = st.selectbox("Loan Term", ["Short Term", "Long Term"])
+years_in_job = st.selectbox("Years in Current Job", ["< 1 year", "1 year", "2 years", "3 years", "4 years",
+                                                     "5 years", "6 years", "7 years", "8 years", "9 years", "10+ years"])
+home_ownership = st.selectbox("Home Ownership", ["Own Home", "Home Mortgage", "Rent", "Other"])
+purpose = st.selectbox("Purpose", ["Debt Consolidation", "Home Improvements", "Other"])
 
-    # Construct DataFrame
-    input_df = pd.DataFrame([{
-        "Credit Score": credit_score,
-        "Annual Income": annual_income,
-        "Monthly Debt": monthly_debt,
-        "Current Loan Amount": loan_amount,
-        "loan_term_months": loan_term_months,
-        "monthly_installment_est": monthly_installment_est,
-        "dti": dti,
-        "loan_to_income": loan_to_income,
-        "years_in_job_num": years_in_job_num,
-        "Credit_Score_missing": 0,
-        "Annual_Income_missing": 0,
-        "Delinquent_missing": 0,
-        "Home Ownership": home_ownership,
-        "Purpose": purpose
-    }])
+# Feature engineering
+loan_term_months = 36 if term == "Short Term" else 60
+monthly_installment_est = loan_amount / (loan_term_months + 1)
+dti = monthly_debt / (annual_income + 1)
+loan_to_income = loan_amount / (annual_income + 1)
+years_in_job_num = 0.5 if years_in_job == "< 1 year" else (10 if years_in_job == "10+ years" else float(years_in_job.split()[0]))
 
-    # Handle encoding manually (if needed)
-    # For demo, convert to simple labels
-    input_df["Home Ownership"] = input_df["Home Ownership"].map({
-        "Own Home": 0, "Home Mortgage": 1, "Rent": 2, "Other": 3
-    })
-    input_df["Purpose"] = input_df["Purpose"].map({
-        "Debt Consolidation": 0, "Home Improvements": 1, "Other": 2
-    })
+# Manual encoding for categoricals
+home_map = {"Own Home": 0, "Home Mortgage": 1, "Rent": 2, "Other": 3}
+purpose_map = {"Debt Consolidation": 0, "Home Improvements": 1, "Other": 2}
 
-    # Impute and scale numeric features
-    numeric_cols = ["Credit Score", "Annual Income", "Monthly Debt", "Current Loan Amount",
-                    "loan_term_months", "monthly_installment_est", "dti", "loan_to_income", "years_in_job_num"]
+# Prediction button
+if st.button("🔍 Predict Loan Status"):
+    input_list = [
+        credit_score, annual_income, monthly_debt, loan_amount,
+        loan_term_months, monthly_installment_est, dti, loan_to_income,
+        years_in_job_num, 0, 0, 0,  # no missing values in UI
+        home_map[home_ownership],
+        purpose_map[purpose]
+    ]
 
-    input_df[numeric_cols] = imputer.transform(input_df[numeric_cols])
-    input_df[numeric_cols] = scaler.transform(input_df[numeric_cols])
+    pred, prob = predict_loan_status(
+        inputs=input_list,
+        scaler_path="Notebook/scaler.pkl",
+        imputer_path="Notebook/imputer.pkl",
+        model_path="Notebook/model.pkl"
+    )
 
-    # Predict
-    prediction = model.predict(input_df)[0]
-    result = "✅ Fully Paid" if prediction == 0 else "❌ Charged Off"
-    st.subheader("Prediction Result:")
-    st.success(result)
-
+    if pred is not None:
+        result = "✅ Fully Paid" if pred == 0 else "❌ Charged Off"
+        st.subheader(f"Prediction: {result}")
+        st.metric("Prediction Confidence", f"{prob*100:.2f}%")
+        st.progress(prob)
+    else:
+        st.error("Something went wrong during prediction.")
