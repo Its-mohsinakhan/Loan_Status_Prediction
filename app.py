@@ -3,47 +3,38 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 
-def predict_loan_status(inputs, scaler_path, imputer_path, model_path):
+def predict_loan_status(inputs, scaler_path, imputer_path, model_path, features_path):
     try:
-        # Load the scaler, imputer, model
-        with open(scaler_path, 'rb') as f1:
-            scaler = pickle.load(f1)
-        with open(imputer_path, 'rb') as f2:
-            imputer = pickle.load(f2)
-        with open(model_path, 'rb') as f3:
-            model = pickle.load(f3)
+        # Load everything
+        scaler = pickle.load(open(scaler_path, "rb"))
+        imputer = pickle.load(open(imputer_path, "rb"))
+        model = pickle.load(open(model_path, "rb"))
+        feature_names = pickle.load(open(features_path, "rb"))
 
-        # Columns used in the model
-        cols = [
-            "Credit Score", "Annual Income", "Monthly Debt", "Current Loan Amount",
-            "loan_term_months", "monthly_installment_est", "dti", "loan_to_income",
-            "years_in_job_num", "Credit_Score_missing", "Annual_Income_missing",
-            "Delinquent_missing", "Home Ownership", "Purpose"
-        ]
+        # Create empty input with all model features
+        x_input = pd.DataFrame([0]*len(feature_names), index=feature_names).T
 
-        # Create a DataFrame
-        x_input = pd.DataFrame([inputs], columns=cols)
+        # Fill provided values
+        for key, value in inputs.items():
+            x_input.at[0, key] = value
 
-        # Impute & scale
+        # Preprocess
         x_input[scaler.feature_names_in_] = imputer.transform(x_input[scaler.feature_names_in_])
         x_input[scaler.feature_names_in_] = scaler.transform(x_input[scaler.feature_names_in_])
 
         # Predict
-        pred = model.predict(x_input)
-        prob = model.predict_proba(x_input)[0][pred[0]]
+        pred = model.predict(x_input)[0]
+        prob = model.predict_proba(x_input)[0][pred]
 
-        return pred[0], prob
+        return pred, prob
     except Exception as e:
         st.error(f"Prediction error: {e}")
         return None, None
 
-# ============== Streamlit UI ==============
 st.set_page_config(page_title="Loan Status Predictor")
 st.title("🏦 Loan Status Prediction")
 
-st.markdown("Fill in the loan application details:")
-
-# Inputs
+# UI Inputs
 credit_score = st.number_input("Credit Score", 300, 850, value=700)
 annual_income = st.number_input("Annual Income ($)", value=50000.0)
 monthly_debt = st.number_input("Monthly Debt ($)", value=1500.0)
@@ -54,38 +45,44 @@ years_in_job = st.selectbox("Years in Current Job", ["< 1 year", "1 year", "2 ye
 home_ownership = st.selectbox("Home Ownership", ["Own Home", "Home Mortgage", "Rent", "Other"])
 purpose = st.selectbox("Purpose", ["Debt Consolidation", "Home Improvements", "Other"])
 
-# Feature engineering
+# Feature Engineering
 loan_term_months = 36 if term == "Short Term" else 60
 monthly_installment_est = loan_amount / (loan_term_months + 1)
 dti = monthly_debt / (annual_income + 1)
 loan_to_income = loan_amount / (annual_income + 1)
 years_in_job_num = 0.5 if years_in_job == "< 1 year" else (10 if years_in_job == "10+ years" else float(years_in_job.split()[0]))
 
-# Manual encoding for categoricals
+# Maps
 home_map = {"Own Home": 0, "Home Mortgage": 1, "Rent": 2, "Other": 3}
 purpose_map = {"Debt Consolidation": 0, "Home Improvements": 1, "Other": 2}
 
-# Prediction button
 if st.button("🔍 Predict Loan Status"):
-    input_list = [
-        credit_score, annual_income, monthly_debt, loan_amount,
-        loan_term_months, monthly_installment_est, dti, loan_to_income,
-        years_in_job_num, 0, 0, 0,  # no missing values in UI
-        home_map[home_ownership],
-        purpose_map[purpose]
-    ]
+    input_dict = {
+        "Credit Score": credit_score,
+        "Annual Income": annual_income,
+        "Monthly Debt": monthly_debt,
+        "Current Loan Amount": loan_amount,
+        "loan_term_months": loan_term_months,
+        "monthly_installment_est": monthly_installment_est,
+        "dti": dti,
+        "loan_to_income": loan_to_income,
+        "years_in_job_num": years_in_job_num,
+        "Credit_Score_missing": 0,
+        "Annual_Income_missing": 0,
+        "Delinquent_missing": 0,
+        "Home Ownership": home_map[home_ownership],
+        "Purpose": purpose_map[purpose]
+    }
 
     pred, prob = predict_loan_status(
-        inputs=input_list,
+        inputs=input_dict,
         scaler_path="Notebook/scaler.pkl",
         imputer_path="Notebook/imputer.pkl",
-        model_path="Notebook/model.pkl"
+        model_path="Notebook/model.pkl",
+        features_path="Notebook/features.pkl"
     )
 
     if pred is not None:
-        result = "✅ Fully Paid" if pred == 0 else "❌ Charged Off"
-        st.subheader(f"Prediction: {result}")
-        st.metric("Prediction Confidence", f"{prob*100:.2f}%")
+        st.subheader(f"Prediction: {'✅ Fully Paid' if pred == 0 else '❌ Charged Off'}")
+        st.metric("Confidence", f"{prob * 100:.2f}%")
         st.progress(prob)
-    else:
-        st.error("Something went wrong during prediction.")
